@@ -1,4 +1,4 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1f5KZBhWur62fQjNhTUjtVVWp8YvSAHCeCmi36B0ca9QD4aw4uFpjx1c2udRAIDUg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw18Ipc2XNWjw8tdhn0XMLwyz1AFyTjedOdclTiEk-cYhnP6X7z5K0MjXKkM8JaSD-m/exec";
 
 let masterGenerus = [];
 let globalPresensi = [];
@@ -7,7 +7,6 @@ let globalKegiatan = [];
 let clickCounter = 0;
 let isAdminLoggedIn = false;
 
-// Ranking Jenjang Usia termasuk MT
 const jenjangRanking = {
   'pra-remaja': 1,
   'pra remaja': 1,
@@ -28,92 +27,82 @@ window.onload = () => {
 };
 
 document.addEventListener('contextmenu', event => event.preventDefault());
-document.onkeydown = function(e) {
-  if (e.ctrlKey && e.altKey && (e.keyCode === 77 || e.key === 'm' || e.key === 'M')) {
-    e.preventDefault();
-    document.getElementById("admin-modal").classList.remove('hidden');
-    return;
-  }
-};
 
-function triggerAdminModal() {
+function triggerAdminLoginPrompt() {
   clickCounter++;
   if (clickCounter >= 5) {
     clickCounter = 0;
-    document.getElementById("admin-modal").classList.remove('hidden');
+    promptAdminLogin();
   }
 }
 
-function closeAdminModal() {
-  document.getElementById("admin-modal").classList.add('hidden');
-}
+async function promptAdminLogin() {
+  const { value: pin } = await Swal.fire({
+    title: '🔐 Login Admin Sekretariat',
+    input: 'password',
+    inputPlaceholder: 'Masukkan PIN Admin',
+    showCancelButton: true,
+    confirmButtonText: 'Masuk',
+    cancelButtonText: 'Batal'
+  });
 
-async function fetchAdminData() {
-  const pin = document.getElementById("admin-pin-input").value;
+  if (!pin) return;
+
   try {
     const ua = encodeURIComponent(navigator.userAgent);
     const res = await fetch(`${SCRIPT_URL}?mode=admin&pin=${pin}&ua=${ua}`);
     const data = await res.json();
 
     if (data.status === 'error') {
-      alert(data.message);
+      Swal.fire('Gagal', data.message, 'error');
       return;
     }
 
     isAdminLoggedIn = true;
-    document.getElementById("btn-admin-status").classList.remove('hidden');
-    document.getElementById("admin-login-box").classList.add('hidden');
-    document.getElementById("admin-dashboard-box").classList.remove('hidden');
+    document.getElementById("btn-admin-badge").classList.remove('hidden');
+    document.getElementById("admin-dashboard-controls").classList.remove('hidden');
+    document.getElementById("btn-open-peserta").classList.remove('hidden');
 
-    renderAdminPresensiList(data.log);
-    renderAdminRundown();
-    renderAdminKegiatan();
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'Admin berhasil masuk! Menu kelola aktif.',
+      showConfirmButton: false,
+      timer: 1500
+    });
+
+    renderDashboardRundown(globalRundown);
+    renderDashboardKegiatan(globalKegiatan);
+    if (!document.getElementById("subcontent-riwayat").classList.contains('hidden')) {
+      renderRiwayatDesaKelompok();
+    }
   } catch (err) {
-    alert("Gagal terhubung ke server.");
+    Swal.fire('Error', 'Gagal menghubungkan ke server.', 'error');
   }
 }
 
-function renderAdminPresensiList(logList) {
-  const container = document.getElementById("adm-list-presensi");
-  if (!logList.length) {
-    container.innerHTML = '<p class="text-xs text-slate-400">Belum ada presensi masuk.</p>';
-    return;
-  }
-  container.innerHTML = logList.map((l, idx) => `
-    <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
-      <div>
-        <span class="font-bold text-slate-100">${l.nama}</span> <span class="text-slate-400">(${l.kelompok})</span>
-        <p class="text-[10px] text-slate-400">Status: <span class="text-emerald-400 font-semibold">${l.status}</span> • ${l.waktu}</p>
-      </div>
-      <button onclick="adminResetPresensi('${l.nama}')" class="bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1 rounded-lg font-bold text-[10px]">Ubah ke Belum Absen</button>
-    </div>
-  `).join('');
-}
+function logoutAdmin() {
+  isAdminLoggedIn = false;
+  document.getElementById("btn-admin-badge").classList.add('hidden');
+  document.getElementById("admin-dashboard-controls").classList.add('hidden');
+  document.getElementById("btn-open-peserta").classList.add('hidden');
+  document.getElementById("form-rundown-box").classList.add('hidden');
+  document.getElementById("form-kegiatan-box").classList.add('hidden');
+  document.getElementById("form-peserta-box").classList.add('hidden');
 
-async function adminResetPresensi(nama) {
-  if (!confirm(`Kembalikan status "${nama}" menjadi Belum Absen?`)) return;
-  
-  // Hapus dari memori lokal
-  globalPresensi = globalPresensi.filter(x => String(x.nama).trim().toLowerCase() !== String(nama).trim().toLowerCase());
-  
-  // Kirim ke backend
-  await fetch(SCRIPT_URL, {
-    method: "POST",
-    body: JSON.stringify({ action: "reset_presensi", nama })
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: 'info',
+    title: 'Admin keluar.',
+    showConfirmButton: false,
+    timer: 1000
   });
 
-  alert(`Status ${nama} berhasil direset!`);
-  loadDataSilent();
-  fetchAdminData();
-}
-
-function switchAdminTab(tab) {
-  ['rekap', 'peserta', 'rundown', 'kegiatan'].forEach(t => {
-    document.getElementById(`adm-sec-${t}`).classList.add('hidden');
-    document.getElementById(`adm-btn-${t}`).className = "bg-slate-900 text-slate-300 px-3 py-2 rounded-xl font-bold";
-  });
-  document.getElementById(`adm-sec-${tab}`).classList.remove('hidden');
-  document.getElementById(`adm-btn-${tab}`).className = "bg-emerald-600 text-white px-3 py-2 rounded-xl font-bold";
+  renderDashboardRundown(globalRundown);
+  renderDashboardKegiatan(globalKegiatan);
+  renderRiwayatDesaKelompok();
 }
 
 function switchTab(tab) {
@@ -221,7 +210,6 @@ function renderBynameList() {
 
   localStorage.setItem('last_kelompok', kelompok);
 
-  // Filter peserta yang belum diabsen ATAU yang statusnya belum final (bisa tampilkan semua yang belum absen)
   const listPeserta = masterGenerus.filter(g => {
     if (g.desa !== desa || g.kelompok !== kelompok) return false;
     const sudahAbsen = globalPresensi.some(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kelompok).trim().toLowerCase());
@@ -252,7 +240,7 @@ function renderBynameList() {
     <div class="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700 mb-2">
       <span class="text-xs font-bold text-slate-300">⚡ Aksi Cepat Kelompok</span>
       <button onclick="hadirkanSemuaKelompok()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition shadow">
-        ✅ Hadirkan Semua (${listPeserta.length} Orang)
+        ✅ Hadirkan Semua Belum Absen (${listPeserta.length} Orang)
       </button>
     </div>
   `;
@@ -303,7 +291,6 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
     keterangan = text;
   }
 
-  // Hapus entri lama jika ada di memori lokal untuk menghindari duplikasi
   globalPresensi = globalPresensi.filter(x => String(x.nama).trim().toLowerCase() !== String(nama).trim().toLowerCase());
 
   globalPresensi.unshift({
@@ -333,7 +320,7 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
   }).catch(err => console.error("Sync error:", err));
 }
 
-// Hadirkan Semua: Pastikan yang sudah berstatus IZIN TIDAK BERUBAH menjadi hadir
+// Hadirkan Semua: Hanya memproses yang belum absen sama sekali (yang sudah izin tetap aman)
 async function hadirkanSemuaKelompok() {
   const desa = document.getElementById("select-desa").value;
   const kelompok = document.getElementById("select-kelompok").value;
@@ -341,9 +328,8 @@ async function hadirkanSemuaKelompok() {
 
   const listPeserta = masterGenerus.filter(g => {
     if (g.desa !== desa || g.kelompok !== kelompok) return false;
-    // Cek apakah sudah diabsen (Hadir atau Izin)
     const existing = globalPresensi.find(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase());
-    return !existing; // Hanya ambil yang benar-benar belum absen sama sekali
+    return !existing; // Hanya yang belum absen sama sekali
   });
 
   if (!listPeserta.length) return;
@@ -372,7 +358,7 @@ async function hadirkanSemuaKelompok() {
     toast: true,
     position: 'top-end',
     icon: 'success',
-    title: 'Anggota yang belum absen berhasil di-hadirkan!',
+    title: 'Anggota berhasil di-hadirkan!',
     showConfirmButton: false,
     timer: 500
   });
@@ -395,7 +381,6 @@ function populateRiwayatFilters() {
   selKel.value = currentKel;
 }
 
-// Render Riwayat Ter-grid Berdasarkan Desa -> Kelompok dengan Statistik Lengkap & Filter Opsional
 function renderRiwayatDesaKelompok() {
   const container = document.getElementById("list-riwayat-all");
   const filterDesaVal = document.getElementById("riwayat-filter-desa").value;
@@ -478,7 +463,10 @@ function renderRiwayatDesaKelompok() {
                           <span class="font-semibold text-slate-200">${a.nama}</span>
                           <p class="text-[10px] text-slate-400">Jenjang: <span class="text-teal-300 font-medium">${a.jenjang || '-'}</span> ${a.ket ? '• ' + a.ket : ''}</p>
                         </div>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badge}">${a.status}</span>
+                        <div class="flex items-center gap-1.5">
+                          <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badge}">${a.status}</span>
+                          ${isAdminLoggedIn && a.status !== 'Belum Absen' ? `<button onclick="adminResetPresensi('${a.nama}')" title="Ubah ke Belum Absen" class="bg-rose-600 hover:bg-rose-500 text-white p-1 rounded text-[9px] font-bold">↺</button>` : ''}
+                        </div>
                       </div>
                     `;
                   }).join('')}
@@ -491,11 +479,122 @@ function renderRiwayatDesaKelompok() {
     `;
   }).join('');
 
-  // Update Footer Summary
   document.getElementById("sum-total").innerText = totalAll;
   document.getElementById("sum-hadir").innerText = hadirAll;
   document.getElementById("sum-izin").innerText = izinAll;
   document.getElementById("sum-belum").innerText = belumAll;
+}
+
+async function adminResetPresensi(nama) {
+  if (!confirm(`Kembalikan status "${nama}" menjadi Belum Absen?`)) return;
+  
+  globalPresensi = globalPresensi.filter(x => String(x.nama).trim().toLowerCase() !== String(nama).trim().toLowerCase());
+  
+  await fetch(SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({ action: "reset_presensi", nama })
+  });
+
+  Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `${nama} direset ke Belum Absen`, showConfirmButton: false, timer: 800 });
+  renderRiwayatDesaKelompok();
+  if (!document.getElementById("subcontent-form").classList.contains('hidden')) {
+    renderBynameList();
+  }
+}
+
+// ---------------- RUNDOWN & KEGIATAN MANAJEMEN ---------------- //
+
+function openFormRundown(id = '', mulai = '', selesai = '', nama = '', ket = '') {
+  document.getElementById("form-rundown-box").classList.remove('hidden');
+  document.getElementById("rd-id").value = id;
+  document.getElementById("rd-mulai").value = mulai;
+  document.getElementById("rd-selesai").value = selesai;
+  document.getElementById("rd-nama").value = nama;
+  document.getElementById("rd-ket").value = ket;
+}
+
+async function saveRundown() {
+  const id = document.getElementById("rd-id").value;
+  const mulai = document.getElementById("rd-mulai").value;
+  const selesai = document.getElementById("rd-selesai").value;
+  const nama = document.getElementById("rd-nama").value;
+  const ket = document.getElementById("rd-ket").value;
+
+  if (!mulai || !selesai || !nama) return alert("Lengkapi jam dan nama kegiatan!");
+
+  await fetch(SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({ action: "save_rundown", id, mulai, selesai, nama, ket })
+  });
+
+  document.getElementById("form-rundown-box").classList.add('hidden');
+  Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Rundown disimpan!', showConfirmButton: false, timer: 800 });
+  loadDataSilent();
+}
+
+async function deleteRundown(id) {
+  if (!confirm("Hapus rundown ini?")) return;
+  await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "delete_rundown", id }) });
+  loadDataSilent();
+}
+
+// Uraian Tanpa Batas Handler
+function openFormKegiatan(id = '', nama = '', uraianArr = []) {
+  document.getElementById("form-kegiatan-box").classList.remove('hidden');
+  document.getElementById("kg-id").value = id;
+  document.getElementById("kg-nama").value = nama;
+  
+  const container = document.getElementById("container-uraian-inputs");
+  container.innerHTML = '';
+  
+  if (uraianArr.length === 0) {
+    tambahInputUraian('');
+  } else {
+    uraianArr.forEach(u => tambahInputUraian(u));
+  }
+}
+
+function tambahInputUraian(val = '') {
+  const container = document.getElementById("container-uraian-inputs");
+  const div = document.createElement('div');
+  div.className = "flex gap-2 items-center";
+  div.innerHTML = `
+    <input type="text" value="${val}" placeholder="Poin uraian..." class="input-uraian w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs">
+    <button onclick="this.parentElement.remove()" class="bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-2 rounded-lg text-xs font-bold">✕</button>
+  `;
+  container.appendChild(div);
+}
+
+async function saveKegiatan() {
+  const id = document.getElementById("kg-id").value;
+  const nama = document.getElementById("kg-nama").value;
+  const inputElements = document.querySelectorAll(".input-uraian");
+  let uraianList = [];
+  inputElements.forEach(el => {
+    if (el.value.trim()) uraianList.push(el.value.trim());
+  });
+
+  if (!nama) return alert("Nama kegiatan wajib diisi!");
+
+  await fetch(SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({ action: "save_kegiatan", id, nama, uraian: uraianList })
+  });
+
+  document.getElementById("form-kegiatan-box").classList.add('hidden');
+  Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Kegiatan disimpan!', showConfirmButton: false, timer: 800 });
+  loadDataSilent();
+}
+
+async function deleteKegiatan(id) {
+  if (!confirm("Hapus kegiatan ini?")) return;
+  await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "delete_kegiatan", id }) });
+  loadDataSilent();
+}
+
+function openFormTambahPeserta() {
+  const box = document.getElementById("form-peserta-box");
+  box.classList.toggle('hidden');
 }
 
 async function saveNewGenerus() {
@@ -511,10 +610,11 @@ async function saveNewGenerus() {
     body: JSON.stringify({ action: "add_generus", nama, kelompok, desa, jenjang })
   });
 
-  alert("Peserta baru berhasil ditambahkan!");
+  Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Peserta ditambahkan!', showConfirmButton: false, timer: 800 });
   document.getElementById("add-nama").value = "";
   document.getElementById("add-kelompok").value = "";
   document.getElementById("add-desa").value = "";
+  document.getElementById("form-peserta-box").classList.add('hidden');
   loadDataSilent();
 }
 
@@ -522,10 +622,16 @@ function renderDashboardRundown(list) {
   const container = document.getElementById("dynamic-rundown");
   if (!list.length) { container.innerHTML = '<p class="text-xs text-slate-400">Belum ada rundown.</p>'; return; }
   container.innerHTML = list.map(r => `
-    <div>
+    <div class="relative group">
       <span class="font-bold text-emerald-400">${r.mulai} - ${r.selesai} WIB</span>
       <p class="text-slate-300 font-medium mt-0.5">${r.nama}</p>
       ${r.ket ? `<p class="text-[11px] text-slate-400">${r.ket}</p>` : ''}
+      ${isAdminLoggedIn ? `
+        <div class="flex gap-1 mt-1">
+          <button onclick="openFormRundown('${r.id}', '${r.mulai}', '${r.selesai}', '${r.nama}', '${r.ket}')" class="text-[10px] bg-amber-600 px-2 py-0.5 rounded text-white font-bold">Edit</button>
+          <button onclick="deleteRundown('${r.id}')" class="text-[10px] bg-rose-600 px-2 py-0.5 rounded text-white font-bold">Hapus</button>
+        </div>
+      ` : ''}
     </div>
   `).join('');
 }
@@ -534,71 +640,21 @@ function renderDashboardKegiatan(list) {
   const container = document.getElementById("dynamic-kegiatan");
   if (!list.length) { container.innerHTML = '<p class="text-xs text-slate-400">Belum ada kegiatan.</p>'; return; }
   container.innerHTML = list.map(k => `
-    <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-1.5">
-      <h4 class="font-bold text-teal-300 text-xs sm:text-sm">📌 ${k.nama}</h4>
+    <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-1.5 relative">
+      <div class="flex justify-between items-start">
+        <h4 class="font-bold text-teal-300 text-xs sm:text-sm">📌 ${k.nama}</h4>
+        ${isAdminLoggedIn ? `
+          <div class="flex gap-1">
+            <button onclick='openFormKegiatan("${k.id}", "${k.nama}", ${JSON.stringify(k.uraian)})' class="text-[10px] bg-amber-600 px-2 py-0.5 rounded text-white font-bold">Edit</button>
+            <button onclick="deleteKegiatan('${k.id}')" class="text-[10px] bg-rose-600 px-2 py-0.5 rounded text-white font-bold">Hapus</button>
+          </div>
+        ` : ''}
+      </div>
       <ul class="list-disc list-inside text-[11px] text-slate-300 space-y-1">
-        ${k.uraian1 ? `<li>${k.uraian1}</li>` : ''}
-        ${k.uraian2 ? `<li>${k.uraian2}</li>` : ''}
-        ${k.uraian3 ? `<li>${k.uraian3}</li>` : ''}
+        ${k.uraian.map(u => `<li>${u}</li>`).join('')}
       </ul>
     </div>
   `).join('');
-}
-
-function renderAdminRundown() {
-  const container = document.getElementById("adm-list-rundown");
-  container.innerHTML = globalRundown.map(r => `
-    <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700 flex justify-between items-center text-[11px]">
-      <div><span class="font-bold text-emerald-400">${r.mulai}-${r.selesai}</span> • <b>${r.nama}</b></div>
-      <button onclick="deleteRundown('${r.id}')" class="bg-rose-600 px-2 py-1 rounded text-white font-bold">Hapus</button>
-    </div>
-  `).join('');
-}
-
-async function saveRundown() {
-  const mulai = document.getElementById("rd-mulai").value;
-  const selesai = document.getElementById("rd-selesai").value;
-  const nama = document.getElementById("rd-nama").value;
-  const ket = document.getElementById("rd-ket").value;
-  if (!mulai || !selesai || !nama) return alert("Isi data dengan lengkap!");
-
-  await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "save_rundown", mulai, selesai, nama, ket }) });
-  alert("Rundown disimpan!");
-  loadDataSilent(); fetchAdminData();
-}
-
-async function deleteRundown(id) {
-  if (!confirm("Hapus?")) return;
-  await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "delete_rundown", id }) });
-  loadDataSilent(); fetchAdminData();
-}
-
-function renderAdminKegiatan() {
-  const container = document.getElementById("adm-list-kegiatan");
-  container.innerHTML = globalKegiatan.map(k => `
-    <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700 flex justify-between items-center text-[11px]">
-      <div><b>${k.nama}</b></div>
-      <button onclick="deleteKegiatan('${k.id}')" class="bg-rose-600 px-2 py-1 rounded text-white font-bold">Hapus</button>
-    </div>
-  `).join('');
-}
-
-async function saveKegiatan() {
-  const nama = document.getElementById("kg-nama").value;
-  const uraian1 = document.getElementById("kg-u1").value;
-  const uraian2 = document.getElementById("kg-u2").value;
-  const uraian3 = document.getElementById("kg-u3").value;
-  if (!nama) return alert("Nama wajib diisi!");
-
-  await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "save_kegiatan", nama, uraian1, uraian2, uraian3 }) });
-  alert("Kegiatan disimpan!");
-  loadDataSilent(); fetchAdminData();
-}
-
-async function deleteKegiatan(id) {
-  if (!confirm("Hapus?")) return;
-  await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "delete_kegiatan", id }) });
-  loadDataSilent(); fetchAdminData();
 }
 
 async function kirimSaran() {
@@ -607,7 +663,7 @@ async function kirimSaran() {
   if (!pesan.trim()) return alert("Tuliskan pesan saran terlebih dahulu.");
 
   await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "saran", pengirim, pesan }) });
-  alert("Saran berhasil dikirim!");
+  Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Saran dikirim!', showConfirmButton: false, timer: 800 });
   document.getElementById("saran-pesan").value = "";
   loadDataSilent();
 }
