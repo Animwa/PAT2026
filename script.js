@@ -1,5 +1,5 @@
 // GANTI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbye0Oqz2eLTR7p5lSRxj8N9MJ9nRosWyXXOfr3nlMWUH6wgaFWElvWMm_x1gGyFsPth/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzsAhss84i9ZE-2ji6Q-Nk7HEnEdWKcf354cMtZJnpU73oaVLZ1oW4U5Cj5vQxrD_LX/exec";
 
 let masterGenerus = [];
 let globalRundown = [];
@@ -101,16 +101,82 @@ async function loadData() {
     renderDashboardRundown(globalRundown);
     renderDashboardKegiatan(globalKegiatan);
 
-    const kelompokUnik = [...new Set(masterGenerus.map(item => item.kelompok))].sort();
-    const selKelompok = document.getElementById("select-kelompok");
-    selKelompok.innerHTML = '<option value="">-- Pilih Kelompok --</option>';
-    kelompokUnik.forEach(k => selKelompok.innerHTML += `<option value="${k}">${k}</option>`);
+    // Filter Bertingkat - 1. Isi Dropdown Desa Unik
+    const desaUnik = [...new Set(masterGenerus.map(item => item.desa))].filter(Boolean).sort();
+    const selDesa = document.getElementById("select-desa");
+    selDesa.innerHTML = '<option value="">-- Pilih Desa --</option>';
+    desaUnik.forEach(d => selDesa.innerHTML += `<option value="${d}">${d}</option>`);
 
     renderRiwayat(data.riwayat);
     renderSaran(data.saranList);
   } catch (err) {
     console.error("Gagal memuat data:", err);
   }
+}
+
+// Filter Bertingkat: Kelompok berdasarkan Desa
+function filterKelompok() {
+  const desa = document.getElementById("select-desa").value;
+  const selKelompok = document.getElementById("select-kelompok");
+  const selJenjang = document.getElementById("select-jenjang");
+  const selNama = document.getElementById("select-nama");
+
+  selKelompok.innerHTML = '<option value="">-- Pilih Desa Dulu --</option>';
+  selKelompok.disabled = true;
+  selJenjang.innerHTML = '<option value="">-- Pilih Kelompok Dulu --</option>';
+  selJenjang.disabled = true;
+  selNama.innerHTML = '<option value="">-- Pilih Jenjang Dulu --</option>';
+  selNama.disabled = true;
+
+  if (!desa) return;
+
+  const kelompokUnik = [...new Set(masterGenerus.filter(g => g.desa === desa).map(g => g.kelompok))].filter(Boolean).sort();
+  selKelompok.innerHTML = '<option value="">-- Pilih Kelompok --</option>';
+  kelompokUnik.forEach(k => selKelompok.innerHTML += `<option value="${k}">${k}</option>`);
+  selKelompok.disabled = false;
+}
+
+// Filter Bertingkat: Jenjang berdasarkan Desa & Kelompok
+function filterJenjang() {
+  const desa = document.getElementById("select-desa").value;
+  const kelompok = document.getElementById("select-kelompok").value;
+  const selJenjang = document.getElementById("select-jenjang");
+  const selNama = document.getElementById("select-nama");
+
+  selNama.innerHTML = '<option value="">-- Pilih Jenjang Dulu --</option>';
+  selNama.disabled = true;
+
+  if (!kelompok) {
+    selJenjang.innerHTML = '<option value="">-- Pilih Kelompok Dulu --</option>';
+    selJenjang.disabled = true;
+    return;
+  }
+
+  const jenjangUnik = [...new Set(masterGenerus.filter(g => g.desa === desa && g.kelompok === kelompok).map(g => g.jenjang))].filter(Boolean);
+  selJenjang.innerHTML = '<option value="">-- Pilih Jenjang Usia --</option>';
+  jenjangUnik.forEach(j => selJenjang.innerHTML += `<option value="${j}">${j}</option>`);
+  selJenjang.disabled = false;
+}
+
+// Filter Bertingkat: Nama Lengkap berdasarkan Desa, Kelompok, & Jenjang (Urut Abjad A-Z)
+function filterNama() {
+  const desa = document.getElementById("select-desa").value;
+  const kelompok = document.getElementById("select-kelompok").value;
+  const jenjang = document.getElementById("select-jenjang").value;
+  const selNama = document.getElementById("select-nama");
+
+  if (!jenjang) {
+    selNama.disabled = true;
+    return;
+  }
+
+  const namaFiltered = masterGenerus
+    .filter(g => g.desa === desa && g.kelompok === kelompok && g.jenjang === jenjang)
+    .sort((a, b) => a.nama.localeCompare(b.nama));
+
+  selNama.innerHTML = '<option value="">-- Pilih Nama Lengkap --</option>';
+  namaFiltered.forEach(g => selNama.innerHTML += `<option value="${g.nama}">${g.nama}</option>`);
+  selNama.disabled = false;
 }
 
 function renderDashboardRundown(list) {
@@ -268,45 +334,6 @@ async function deleteKegiatan(id) {
   fetchAdminData();
 }
 
-function filterJenjang() {
-  const kel = document.getElementById("select-kelompok").value;
-  const selJenjang = document.getElementById("select-jenjang");
-  const selNama = document.getElementById("select-nama");
-
-  selNama.innerHTML = '<option value="">-- Pilih Jenjang Dulu --</option>';
-  selNama.disabled = true;
-
-  if (!kel) {
-    selJenjang.innerHTML = '<option value="">-- Pilih Kelompok Dulu --</option>';
-    selJenjang.disabled = true;
-    return;
-  }
-
-  const jenjangUnik = [...new Set(masterGenerus.filter(g => g.kelompok === kel).map(g => g.jenjang))];
-  selJenjang.innerHTML = '<option value="">-- Pilih Jenjang Usia --</option>';
-  jenjangUnik.forEach(j => selJenjang.innerHTML += `<option value="${j}">${j}</option>`);
-  selJenjang.disabled = false;
-}
-
-function filterNama() {
-  const kel = document.getElementById("select-kelompok").value;
-  const jen = document.getElementById("select-jenjang").value;
-  const selNama = document.getElementById("select-nama");
-
-  if (!jen) {
-    selNama.disabled = true;
-    return;
-  }
-
-  const namaFiltered = masterGenerus
-    .filter(g => g.kelompok === kel && g.jenjang === jen)
-    .sort((a, b) => a.nama.localeCompare(b.nama));
-
-  selNama.innerHTML = '<option value="">-- Pilih Nama Anda --</option>';
-  namaFiltered.forEach(g => selNama.innerHTML += `<option value="${g.nama}">${g.nama}</option>`);
-  selNama.disabled = false;
-}
-
 function setStatus(status) {
   statusPilihan = status;
   const btnHadir = document.getElementById("btn-hadir");
@@ -330,7 +357,7 @@ async function kirimPresensi() {
   const nama = document.getElementById("select-nama").value;
   const keterangan = statusPilihan === 'Hadir' ? 'Hadir di lokasi' : document.getElementById("input-keterangan").value;
 
-  if (!nama) return alert("Silakan pilih kelompok, jenjang, dan nama lengkap terlebih dahulu!");
+  if (!nama) return alert("Silakan lengkapi pilihan desa, kelompok, jenjang, dan nama lengkap terlebih dahulu!");
   if (statusPilihan === 'Izin' && !keterangan.trim()) return alert("Harap isi alasan izin terlebih dahulu!");
 
   const btn = document.getElementById("btn-submit-presensi");
