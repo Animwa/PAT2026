@@ -1,17 +1,20 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby0aQ6KdF7kK-VirWqh1GmMtA_BtP6bcC9ZTIPW2phe1O5VfExNk_HvQynr6vuic4sF/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1f5KZBhWur62fQjNhTUjtVVWp8YvSAHCeCmi36B0ca9QD4aw4uFpjx1c2udRAIDUg/exec";
 
 let masterGenerus = [];
 let globalPresensi = [];
 let globalRundown = [];
 let globalKegiatan = [];
 let clickCounter = 0;
+let isAdminLoggedIn = false;
 
+// Ranking Jenjang Usia termasuk MT
 const jenjangRanking = {
   'pra-remaja': 1,
   'pra remaja': 1,
   'remaja': 2,
   'muda-mudi': 3,
-  'muda mudi': 3
+  'muda mudi': 3,
+  'mt': 4
 };
 
 function getJenjangScore(val) {
@@ -24,7 +27,6 @@ window.onload = () => {
   loadDataSilent();
 };
 
-// Keamanan Client-Side
 document.addEventListener('contextmenu', event => event.preventDefault());
 document.onkeydown = function(e) {
   if (e.ctrlKey && e.altKey && (e.keyCode === 77 || e.key === 'm' || e.key === 'M')) {
@@ -44,9 +46,6 @@ function triggerAdminModal() {
 
 function closeAdminModal() {
   document.getElementById("admin-modal").classList.add('hidden');
-  document.getElementById("admin-pin-input").value = "";
-  document.getElementById("admin-login-box").classList.remove('hidden');
-  document.getElementById("admin-dashboard-box").classList.add('hidden');
 }
 
 async function fetchAdminData() {
@@ -61,24 +60,51 @@ async function fetchAdminData() {
       return;
     }
 
+    isAdminLoggedIn = true;
+    document.getElementById("btn-admin-status").classList.remove('hidden');
     document.getElementById("admin-login-box").classList.add('hidden');
     document.getElementById("admin-dashboard-box").classList.remove('hidden');
 
-    document.getElementById("stat-presensi").innerText = data.log.length;
-    document.getElementById("stat-saran").innerText = data.saran.length;
-
-    document.getElementById("adm-list-presensi").innerHTML = data.log.map(l => `
-      <div class="bg-slate-900 p-2 rounded-lg border border-slate-700 flex justify-between items-center text-[11px]">
-        <div><span class="font-bold text-slate-100">${l.nama}</span> <span class="text-slate-400">(${l.kelompok})</span></div>
-        <span class="px-2 py-0.5 rounded font-bold ${l.status === 'Hadir' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}">${l.status}</span>
-      </div>
-    `).join('');
-
+    renderAdminPresensiList(data.log);
     renderAdminRundown();
     renderAdminKegiatan();
   } catch (err) {
     alert("Gagal terhubung ke server.");
   }
+}
+
+function renderAdminPresensiList(logList) {
+  const container = document.getElementById("adm-list-presensi");
+  if (!logList.length) {
+    container.innerHTML = '<p class="text-xs text-slate-400">Belum ada presensi masuk.</p>';
+    return;
+  }
+  container.innerHTML = logList.map((l, idx) => `
+    <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
+      <div>
+        <span class="font-bold text-slate-100">${l.nama}</span> <span class="text-slate-400">(${l.kelompok})</span>
+        <p class="text-[10px] text-slate-400">Status: <span class="text-emerald-400 font-semibold">${l.status}</span> • ${l.waktu}</p>
+      </div>
+      <button onclick="adminResetPresensi('${l.nama}')" class="bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1 rounded-lg font-bold text-[10px]">Ubah ke Belum Absen</button>
+    </div>
+  `).join('');
+}
+
+async function adminResetPresensi(nama) {
+  if (!confirm(`Kembalikan status "${nama}" menjadi Belum Absen?`)) return;
+  
+  // Hapus dari memori lokal
+  globalPresensi = globalPresensi.filter(x => String(x.nama).trim().toLowerCase() !== String(nama).trim().toLowerCase());
+  
+  // Kirim ke backend
+  await fetch(SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({ action: "reset_presensi", nama })
+  });
+
+  alert(`Status ${nama} berhasil direset!`);
+  loadDataSilent();
+  fetchAdminData();
 }
 
 function switchAdminTab(tab) {
@@ -112,11 +138,11 @@ function switchPresensiSubTab(sub) {
     const savedKelompok = localStorage.getItem('last_kelompok');
     if (savedDesa && savedKelompok) renderBynameList();
   } else if (sub === 'riwayat') {
+    populateRiwayatFilters();
     renderRiwayatDesaKelompok();
   }
 }
 
-// Muat data & auto-restore pilihan Desa & Kelompok terakhir
 async function loadDataSilent() {
   try {
     const res = await fetch(SCRIPT_URL);
@@ -173,7 +199,16 @@ function filterKelompok(isRestore = false) {
   }
 }
 
-// Render By-Name List per Kelompok Berdasarkan Jenjang Usia
+function resetDesaKelompok() {
+  localStorage.removeItem('last_desa');
+  localStorage.removeItem('last_kelompok');
+  document.getElementById("select-desa").value = "";
+  const selKelompok = document.getElementById("select-kelompok");
+  selKelompok.innerHTML = '<option value="">-- Pilih Desa Dulu --</option>';
+  selKelompok.disabled = true;
+  document.getElementById("container-byname").innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Silakan pilih Desa dan Kelompok di atas.</p>';
+}
+
 function renderBynameList() {
   const desa = document.getElementById("select-desa").value;
   const kelompok = document.getElementById("select-kelompok").value;
@@ -186,6 +221,7 @@ function renderBynameList() {
 
   localStorage.setItem('last_kelompok', kelompok);
 
+  // Filter peserta yang belum diabsen ATAU yang statusnya belum final (bisa tampilkan semua yang belum absen)
   const listPeserta = masterGenerus.filter(g => {
     if (g.desa !== desa || g.kelompok !== kelompok) return false;
     const sudahAbsen = globalPresensi.some(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kelompok).trim().toLowerCase());
@@ -234,7 +270,7 @@ function renderBynameList() {
             <div class="bg-slate-900 p-3 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <p class="font-bold text-slate-100 text-xs sm:text-sm">${p.nama}</p>
-                <p class="text-[10px] text-slate-400">Desa: ${p.desa}</p>
+                <p class="text-[10px] text-slate-400">Desa: ${p.desa} • Jenjang: ${p.jenjang || '-'}</p>
               </div>
               <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button onclick="submitPresensiByname('${p.nama}', '${p.kelompok}', '${p.jenjang}', 'Hadir')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition shadow">Hadir</button>
@@ -250,7 +286,6 @@ function renderBynameList() {
   container.innerHTML = htmlContent;
 }
 
-// Absen Cepat 1 Orang (Optimistic UI & Hilang Instan)
 async function submitPresensiByname(nama, kelompok, jenjang, status) {
   let keterangan = status === 'Hadir' ? 'Hadir di lokasi' : '';
   
@@ -267,6 +302,9 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
     if (!text) return;
     keterangan = text;
   }
+
+  // Hapus entri lama jika ada di memori lokal untuk menghindari duplikasi
+  globalPresensi = globalPresensi.filter(x => String(x.nama).trim().toLowerCase() !== String(nama).trim().toLowerCase());
 
   globalPresensi.unshift({
     nama: nama,
@@ -295,7 +333,7 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
   }).catch(err => console.error("Sync error:", err));
 }
 
-// Fitur Kilat: Hadirkan Semua Satu Kelompok Sekaligus
+// Hadirkan Semua: Pastikan yang sudah berstatus IZIN TIDAK BERUBAH menjadi hadir
 async function hadirkanSemuaKelompok() {
   const desa = document.getElementById("select-desa").value;
   const kelompok = document.getElementById("select-kelompok").value;
@@ -303,12 +341,14 @@ async function hadirkanSemuaKelompok() {
 
   const listPeserta = masterGenerus.filter(g => {
     if (g.desa !== desa || g.kelompok !== kelompok) return false;
-    return !globalPresensi.some(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase());
+    // Cek apakah sudah diabsen (Hadir atau Izin)
+    const existing = globalPresensi.find(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase());
+    return !existing; // Hanya ambil yang benar-benar belum absen sama sekali
   });
 
   if (!listPeserta.length) return;
 
-  if (!confirm(`Hadirkan ${listPeserta.length} orang sekaligus di kelompok ${kelompok}?`)) return;
+  if (!confirm(`Hadirkan ${listPeserta.length} orang yang belum absen di kelompok ${kelompok}?`)) return;
 
   listPeserta.forEach(p => {
     globalPresensi.unshift({
@@ -332,42 +372,68 @@ async function hadirkanSemuaKelompok() {
     toast: true,
     position: 'top-end',
     icon: 'success',
-    title: 'Semua anggota kelompok berhasil di-hadirkan!',
+    title: 'Anggota yang belum absen berhasil di-hadirkan!',
     showConfirmButton: false,
     timer: 500
   });
 }
 
-// Render Riwayat Ter-grid Berdasarkan Desa -> Kelompok dengan Statistik Lengkap
+function populateRiwayatFilters() {
+  const desaUnik = [...new Set(masterGenerus.map(m => m.desa))].filter(Boolean).sort();
+  const kelUnik = [...new Set(masterGenerus.map(m => m.kelompok))].filter(Boolean).sort();
+
+  const selDesa = document.getElementById("riwayat-filter-desa");
+  const currentDesa = selDesa.value;
+  selDesa.innerHTML = '<option value="">-- Semua Desa --</option>';
+  desaUnik.forEach(d => selDesa.innerHTML += `<option value="${d}">${d}</option>`);
+  selDesa.value = currentDesa;
+
+  const selKel = document.getElementById("riwayat-filter-kelompok");
+  const currentKel = selKel.value;
+  selKel.innerHTML = '<option value="">-- Semua Kelompok --</option>';
+  kelUnik.forEach(k => selKel.innerHTML += `<option value="${k}">${k}</option>`);
+  selKel.value = currentKel;
+}
+
+// Render Riwayat Ter-grid Berdasarkan Desa -> Kelompok dengan Statistik Lengkap & Filter Opsional
 function renderRiwayatDesaKelompok() {
   const container = document.getElementById("list-riwayat-all");
-  
-  const desaUnik = [...new Set(masterGenerus.map(m => m.desa))].filter(Boolean).sort();
+  const filterDesaVal = document.getElementById("riwayat-filter-desa").value;
+  const filterKelVal = document.getElementById("riwayat-filter-kelompok").value;
 
-  if (!desaUnik.length) {
-    container.innerHTML = '<p class="text-xs text-slate-400 text-center col-span-full">Belum ada data desa.</p>';
+  let desaList = [...new Set(masterGenerus.map(m => m.desa))].filter(Boolean).sort();
+  if (filterDesaVal) desaList = [filterDesaVal];
+
+  if (!desaList.length) {
+    container.innerHTML = '<p class="text-xs text-slate-400 text-center col-span-full">Tidak ada data desa.</p>';
     return;
   }
 
-  container.innerHTML = desaUnik.map(desa => {
-    const kelompokDiDesa = [...new Set(masterGenerus.filter(m => m.desa === desa).map(m => m.kelompok))].filter(Boolean).sort();
+  let totalAll = 0, hadirAll = 0, izinAll = 0, belumAll = 0;
+
+  container.innerHTML = desaList.map(desa => {
+    let kelompokDiDesa = [...new Set(masterGenerus.filter(m => m.desa === desa).map(m => m.kelompok))].filter(Boolean).sort();
+    if (filterKelVal) {
+      kelompokDiDesa = kelompokDiDesa.filter(k => k === filterKelVal);
+      if (!kelompokDiDesa.length) return '';
+    }
 
     return `
       <div class="col-span-full bg-slate-800/90 border border-slate-700 p-4 sm:p-5 rounded-2xl shadow space-y-4">
-        <h3 class="font-black text-base text-emerald-400 border-b border-slate-700 pb-2">🏘️ Desa: ${desa}</h3>
+        <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+          <h3 class="font-black text-base text-emerald-400">🏘️ Desa: ${desa}</h3>
+          <span class="text-xs bg-slate-700 px-2.5 py-1 rounded-full font-semibold text-slate-300">Jumlah Kelompok: ${kelompokDiDesa.length}</span>
+        </div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${kelompokDiDesa.map(kel => {
             const anggota = masterGenerus.filter(m => m.desa === desa && m.kelompok === kel);
             
-            // Hitung statistik kelompok
             let total = anggota.length;
-            let hadir = 0;
-            let izin = 0;
-            let belumHadir = 0;
+            let hadir = 0, izin = 0, belumHadir = 0;
 
             const detailAnggota = anggota.map(a => {
-              const abs = globalPresensi.find(x => String(x.nama).trim().toLowerCase() === String(a.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kel).trim().toLowerCase());
+              const abs = globalPresensi.find(x => String(x.nama).trim().toLowerCase() === String(a.nama).trim().toLowerCase());
               const st = abs ? abs.status : 'Belum Absen';
               
               if (st === 'Hadir') hadir++;
@@ -377,7 +443,11 @@ function renderRiwayatDesaKelompok() {
               return { ...a, status: st, ket: abs ? abs.ket : '' };
             });
 
-            // Urutkan berdasarkan jenjang lalu nama
+            totalAll += total;
+            hadirAll += hadir;
+            izinAll += izin;
+            belumAll += belumHadir;
+
             detailAnggota.sort((a, b) => {
               const scoreA = getJenjangScore(a.jenjang);
               const scoreB = getJenjangScore(b.jenjang);
@@ -420,6 +490,12 @@ function renderRiwayatDesaKelompok() {
       </div>
     `;
   }).join('');
+
+  // Update Footer Summary
+  document.getElementById("sum-total").innerText = totalAll;
+  document.getElementById("sum-hadir").innerText = hadirAll;
+  document.getElementById("sum-izin").innerText = izinAll;
+  document.getElementById("sum-belum").innerText = belumAll;
 }
 
 async function saveNewGenerus() {
