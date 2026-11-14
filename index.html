@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pengajian Akhir Tahun - Generus Karanganyar barat</title>
+  <title>PAT2026 - KRABAR</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
@@ -13,13 +13,13 @@
   <header class="bg-slate-800/90 backdrop-blur border-b border-slate-700 p-4 sticky top-0 z-30 shadow-md">
     <div class="max-w-4xl mx-auto flex justify-between items-center">
       <div>
-        <h1 onclick="triggerAdminModal()" class="text-base sm:text-lg font-extrabold text-emerald-400 cursor-pointer tracking-wide">
-          ✨ KEGIATAN PENGAJIAN AKHIR TAHUN
+        <h1 onclick="triggerAdminLoginPrompt()" class="text-base sm:text-lg font-extrabold text-emerald-400 cursor-pointer tracking-wide" title="Klik 5x untuk login admin">
+          ✨ KEGIATAN PPENGAJIAN AKHIR TAHUN
         </h1>
-        <p class="text-xs text-slate-400"> Presensi & Aspirasi Generus</p>
+        <p class="text-xs text-slate-400">Presensi & Aspirasi Generus</p>
       </div>
       <div class="flex items-center gap-2">
-        <button id="btn-admin-status" onclick="triggerAdminModal()" class="hidden text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-2.5 py-1 rounded-full font-bold">🔒 Admin Aktif</button>
+        <button id="btn-admin-badge" onclick="logoutAdmin()" class="hidden text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-2.5 py-1 rounded-full font-bold">🔒 Admin (Keluar)</button>
         <span class="text-xs bg-emerald-900/50 text-emerald-300 px-3 py-1 rounded-full border border-emerald-700/60 font-medium">Online</span>
       </div>
     </div>
@@ -34,20 +34,67 @@
         <span class="bg-black/30 text-xs px-3 py-1 rounded-full font-semibold uppercase tracking-wider">Fokus Acara</span>
         <h2 class="text-3xl font-black mt-3 tracking-tight">LEVEL UP! 🚀</h2>
         <p class="text-sm sm:text-base text-emerald-100 mt-2 leading-relaxed">
-          Upgrade Kualitas Diri, Perkuat Kerukunan, dan Siap Menyambut Tahun dengan Semangat Baru.
+          Upgrade Kualitas Diri, Perkuat Kerukunan, dan Siap Menyambut Tahun Baru dengan Semangat Baru.
         </p>
+      </div>
+
+      <!-- Tombol Admin Khusus Dashboard (Muncul jika Login) -->
+      <div id="admin-dashboard-controls" class="hidden bg-slate-800 border border-emerald-500/50 p-4 rounded-2xl space-y-3 shadow-lg">
+        <h3 class="font-bold text-emerald-400 text-xs uppercase tracking-wider">🛠️ Panel Kontrol Admin (Dashboard)</h3>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="openFormRundown()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition">+ Tambah Rundown</button>
+          <button onclick="openFormKegiatan()" class="bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition">+ Tambah Kegiatan & Uraian</button>
+        </div>
+      </div>
+
+      <!-- Form Input Rundown (Hidden by default) -->
+      <div id="form-rundown-box" class="hidden bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3">
+        <h4 font-bold text-emerald-400 text-sm>Form Kelola Rundown</h4>
+        <input type="hidden" id="rd-id">
+        <div class="grid grid-cols-2 gap-2">
+          <input type="text" id="rd-mulai" placeholder="Mulai (Cth: 19.30)" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs">
+          <input type="text" id="rd-selesai" placeholder="Selesai (Cth: 20.00)" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs">
+        </div>
+        <input type="text" id="rd-nama" placeholder="Nama Kegiatan" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs">
+        <input type="text" id="rd-ket" placeholder="Keterangan" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs">
+        <div class="flex gap-2">
+          <button onclick="saveRundown()" class="bg-emerald-600 px-4 py-2 rounded-xl text-white text-xs font-bold">Simpan</button>
+          <button onclick="document.getElementById('form-rundown-box').classList.add('hidden')" class="bg-slate-700 px-4 py-2 rounded-xl text-white text-xs">Batal</button>
+        </div>
+      </div>
+
+      <!-- Form Input Kegiatan & Uraian Tanpa Batas (Hidden by default) -->
+      <div id="form-kegiatan-box" class="hidden bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3">
+        <h4 class="font-bold text-teal-400 text-sm">Form Kelola Kegiatan & Uraian Tanpa Batas</h4>
+        <input type="hidden" id="kg-id">
+        <input type="text" id="kg-nama" placeholder="Nama Kegiatan / Sesi" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs">
+        
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Daftar Poin Uraian (Tambah sebanyak mungkin):</label>
+          <div id="container-uraian-inputs" class="space-y-2"></div>
+          <button onclick="tambahInputUraian()" class="mt-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg font-semibold">+ Tambah Poin Uraian</button>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button onclick="saveKegiatan()" class="bg-teal-600 px-4 py-2 rounded-xl text-white text-xs font-bold">Simpan Kegiatan</button>
+          <button onclick="document.getElementById('form-kegiatan-box').classList.add('hidden')" class="bg-slate-700 px-4 py-2 rounded-xl text-white text-xs">Batal</button>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 space-y-4 shadow-lg">
-          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2"><span>📅</span> Rundown Kegiatan</h3>
+          <h3 class="text-sm font-bold text-slate-200 flex items-center justify-between">
+            <span>📅 Rundown Kegiatan</span>
+          </h3>
           <div id="dynamic-rundown" class="border-l-2 border-emerald-500 ml-2 space-y-4 pl-4 text-xs sm:text-sm">
             <p class="text-slate-400">Memuat rundown...</p>
           </div>
         </div>
 
         <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 space-y-4 shadow-lg">
-          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2"><span>📌</span> Detail Sesi & Uraian Kegiatan</h3>
+          <h3 class="text-sm font-bold text-slate-200 flex items-center justify-between">
+            <span>📌 Detail Sesi & Uraian Kegiatan</span>
+          </h3>
           <div id="dynamic-kegiatan" class="space-y-3">
             <p class="text-slate-400 text-xs">Memuat kegiatan...</p>
           </div>
@@ -57,8 +104,6 @@
 
     <!-- TAB 2: PRESENSI -->
     <section id="tab-presensi" class="hidden space-y-6">
-      
-      <!-- Sub-Tab Navigation -->
       <div class="flex bg-slate-800 p-1.5 rounded-2xl border border-slate-700 max-w-xs mx-auto shadow">
         <button onclick="switchPresensiSubTab('form')" id="subtab-form" class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-xl bg-emerald-600 text-white transition">Form Presensi</button>
         <button onclick="switchPresensiSubTab('riwayat')" id="subtab-riwayat" class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-xl text-slate-400 transition">Riwayat Absen</button>
@@ -95,7 +140,7 @@
         </div>
       </div>
 
-      <!-- Sub-Tab 2: Riwayat Presensi Ter-grid & Filter Opsional -->
+      <!-- Sub-Tab 2: Riwayat Presensi & Reset Admin -->
       <div id="subcontent-riwayat" class="hidden space-y-6">
         <div class="bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-4 shadow-xl">
           <div class="flex justify-between items-center">
@@ -118,12 +163,10 @@
           </div>
         </div>
 
-        <!-- Daftar Riwayat Ter-grid -->
         <div id="list-riwayat-all" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <p class="text-xs text-slate-500 text-center py-6 col-span-full">Memuat riwayat...</p>
         </div>
 
-        <!-- Ringkasan Total di Bagian Paling Bawah -->
         <div id="riwayat-summary-footer" class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-3">
           <h4 class="font-bold text-emerald-400 text-sm">📊 Ringkasan Kehadiran Keseluruhan</h4>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
@@ -146,7 +189,7 @@
           
           <div>
             <label class="block text-xs text-slate-400 mb-1 font-semibold">Nama / Kelompok (Opsional)</label>
-            <input type="text" id="saran-nama" placeholder="Contoh: Budi / Kelompok Remaja" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs sm:text-sm outline-none focus:border-teal-500">
+            <input type="text" id="saran-nama" placeholder="Contoh: Budi / Kelompok " class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs sm:text-sm outline-none focus:border-teal-500">
           </div>
 
           <div>
@@ -160,8 +203,31 @@
         </div>
 
         <div class="bg-slate-800 p-5 sm:p-6 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
-          <h3 class="font-bold text-xs sm:text-sm text-slate-200">💬 Daftar Saran Masuk</h3>
-          <div id="list-saran" class="space-y-3 max-h-96 overflow-y-auto pr-1">
+          <div class="flex justify-between items-center">
+            <h3 class="font-bold text-xs sm:text-sm text-slate-200">💬 Daftar Saran Masuk</h3>
+            <!-- Tambah Peserta Card (Admin Only di Tab Saran/Panel) -->
+            <button onclick="openFormTambahPeserta()" id="btn-open-peserta" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition">+ Tambah Peserta</button>
+          </div>
+          
+          <!-- Form Tambah Peserta (Hidden by default) -->
+          <div id="form-peserta-box" class="hidden bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2.5">
+            <p class="font-bold text-emerald-400 text-xs">Tambah Peserta Generus Baru</p>
+            <input type="text" id="add-nama" placeholder="Nama Lengkap" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs">
+            <input type="text" id="add-kelompok" placeholder="Kelompok" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs">
+            <input type="text" id="add-desa" placeholder="Desa" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs">
+            <select id="add-jenjang" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-slate-200">
+              <option value="Pra-Remaja">Pra-Remaja</option>
+              <option value="Remaja">Remaja</option>
+              <option value="Muda-Mudi">Muda-Mudi</option>
+              <option value="MT">MT</option>
+            </select>
+            <div class="flex gap-2">
+              <button onclick="saveNewGenerus()" class="bg-emerald-600 px-3 py-1.5 rounded-lg text-white font-bold text-xs">Simpan</button>
+              <button onclick="document.getElementById('form-peserta-box').classList.add('hidden')" class="bg-slate-700 px-3 py-1.5 rounded-lg text-white text-xs">Batal</button>
+            </div>
+          </div>
+
+          <div id="list-saran" class="space-y-3 max-h-80 overflow-y-auto pr-1">
             <p class="text-xs text-slate-400 text-center py-6">Memuat saran...</p>
           </div>
         </div>
@@ -169,81 +235,6 @@
     </section>
 
   </main>
-
-  <!-- PANEL ADMIN TERSEMBUNYI (MENYATU DENGAN TEMA LANDING PAGE) -->
-  <div id="admin-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-xl w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
-        <h3 class="font-bold text-emerald-400 text-base sm:text-lg">🔐 Panel Admin Sekretariat</h3>
-        <button onclick="closeAdminModal()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
-      </div>
-      
-      <div id="admin-login-box" class="space-y-4">
-        <p class="text-xs text-slate-400">Masukkan PIN Admin untuk mengakses manajemen data, rundown, kegiatan, dan kontrol status presensi.</p>
-        <div class="flex gap-2">
-          <input type="password" id="admin-pin-input" placeholder="Masukkan PIN" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-center tracking-widest outline-none focus:border-emerald-500">
-          <button onclick="fetchAdminData()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-3 rounded-xl text-xs shrink-0 transition">Masuk</button>
-        </div>
-      </div>
-
-      <div id="admin-dashboard-box" class="hidden space-y-5 pt-2 text-xs">
-        <div class="flex flex-wrap gap-2 border-b border-slate-700 pb-3">
-          <button onclick="switchAdminTab('rekap')" id="adm-btn-rekap" class="bg-emerald-600 text-white px-3 py-2 rounded-xl font-bold">📊 Rekap Presensi</button>
-          <button onclick="switchAdminTab('peserta')" id="adm-btn-peserta" class="bg-slate-900 text-slate-300 px-3 py-2 rounded-xl font-bold">👤 Tambah Peserta</button>
-          <button onclick="switchAdminTab('rundown')" id="adm-btn-rundown" class="bg-slate-900 text-slate-300 px-3 py-2 rounded-xl font-bold">📅 Rundown</button>
-          <button onclick="switchAdminTab('kegiatan')" id="adm-btn-kegiatan" class="bg-slate-900 text-slate-300 px-3 py-2 rounded-xl font-bold">📌 Kegiatan</button>
-        </div>
-
-        <div id="adm-sec-rekap" class="space-y-3">
-          <p class="font-bold text-slate-200">📋 Kontrol & Ubah Status Kehadiran Cepat:</p>
-          <p class="text-[11px] text-slate-400">Anda dapat mengubah status peserta yang salah input (Hadir/Izin) menjadi Belum Absen langsung dari panel ini.</p>
-          <div id="adm-list-presensi" class="space-y-2 max-h-60 overflow-y-auto"></div>
-        </div>
-
-        <div id="adm-sec-peserta" class="hidden space-y-3">
-          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
-            <p class="font-bold text-emerald-400">➕ Tambah Data Generus Baru</p>
-            <input type="text" id="add-nama" placeholder="Nama Lengkap" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs">
-            <input type="text" id="add-kelompok" placeholder="Kelompok" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs">
-            <input type="text" id="add-desa" placeholder="Desa" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs">
-            <select id="add-jenjang" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200">
-              <option value="Pra-Remaja">Pra-Remaja</option>
-              <option value="Remaja">Remaja</option>
-              <option value="Muda-Mudi">Muda-Mudi</option>
-              <option value="MT">MT</option>
-            </select>
-            <button onclick="saveNewGenerus()" class="w-full bg-emerald-600 hover:bg-emerald-500 font-bold py-2.5 rounded-xl text-white">Simpan Peserta</button>
-          </div>
-        </div>
-
-        <div id="adm-sec-rundown" class="hidden space-y-3">
-          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2.5">
-            <p class="font-bold text-emerald-400">➕ Tambah / Edit Rundown</p>
-            <div class="grid grid-cols-2 gap-2">
-              <input type="text" id="rd-mulai" placeholder="Mulai (Cth: 19.30)" class="bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
-              <input type="text" id="rd-selesai" placeholder="Selesai (Cth: 20.00)" class="bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
-            </div>
-            <input type="text" id="rd-nama" placeholder="Nama Kegiatan" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
-            <input type="text" id="rd-ket" placeholder="Keterangan Singkat" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
-            <button onclick="saveRundown()" class="w-full bg-emerald-600 hover:bg-emerald-500 font-bold py-2.5 rounded-xl text-white">Simpan Rundown</button>
-          </div>
-          <div id="adm-list-rundown" class="space-y-2 max-h-48 overflow-y-auto"></div>
-        </div>
-
-        <div id="adm-sec-kegiatan" class="hidden space-y-3">
-          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2.5">
-            <p class="font-bold text-teal-400">➕ Tambah / Edit Kegiatan & Uraian</p>
-            <input type="text" id="kg-nama" placeholder="Nama Kegiatan / Sesi" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
-            <input type="text" id="kg-u1" placeholder="Uraian Poin 1" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
-            <input type="text" id="kg-u2" placeholder="Uraian Poin 2" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
-            <input type="text" id="kg-u3" placeholder="Uraian Poin 3" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
-            <button onclick="saveKegiatan()" class="w-full bg-teal-600 hover:bg-teal-500 font-bold py-2.5 rounded-xl text-white">Simpan Kegiatan</button>
-          </div>
-          <div id="adm-list-kegiatan" class="space-y-2 max-h-48 overflow-y-auto"></div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- BOTTOM NAVBAR -->
   <nav class="fixed bottom-0 inset-x-0 bg-slate-800/95 backdrop-blur border-t border-slate-700 flex justify-around py-3 z-20 max-w-4xl mx-auto shadow-2xl">
