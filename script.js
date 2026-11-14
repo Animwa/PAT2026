@@ -6,6 +6,21 @@ let globalRundown = [];
 let globalKegiatan = [];
 let clickCounter = 0;
 
+// Urutan prioritas jenjang usia
+const jenjangRanking = {
+  'pra-remaja': 1,
+  'pra remaja': 1,
+  'remaja': 2,
+  'muda-mudi': 3,
+  'muda mudi': 3
+};
+
+function getJenjangScore(val) {
+  if (!val) return 99;
+  const clean = String(val).trim().toLowerCase();
+  return jenjangRanking[clean] || 99;
+}
+
 window.onload = () => {
   loadData();
 };
@@ -79,7 +94,6 @@ function switchAdminTab(tab) {
   document.getElementById(`adm-btn-${tab}`).className = "bg-emerald-600 text-white px-3 py-2 rounded-xl font-bold";
 }
 
-// Navigasi Tab Utama
 function switchTab(tab) {
   ['dashboard', 'presensi', 'saran'].forEach(t => {
     document.getElementById(`tab-${t}`).classList.add('hidden');
@@ -89,7 +103,6 @@ function switchTab(tab) {
   document.getElementById(`nav-${tab}`).className = "flex flex-col items-center text-emerald-400 text-xs font-bold gap-1 transition";
 }
 
-// Sub-Tab Presensi & Riwayat
 function switchPresensiSubTab(sub) {
   ['form', 'riwayat'].forEach(s => {
     document.getElementById(`subcontent-${s}`).classList.add('hidden');
@@ -113,13 +126,17 @@ async function loadData() {
     renderDashboardRundown(globalRundown);
     renderDashboardKegiatan(globalKegiatan);
 
-    // Populate Desa Filter Horizontal
     const desaUnik = [...new Set(masterGenerus.map(item => item.desa))].filter(Boolean).sort();
     const selDesa = document.getElementById("select-desa");
     selDesa.innerHTML = '<option value="">-- Pilih Desa --</option>';
     desaUnik.forEach(d => selDesa.innerHTML += `<option value="${d}">${d}</option>`);
 
     renderSaran(data.saranList || []);
+    
+    // Refresh list if currently active
+    if (document.getElementById("select-kelompok").value) {
+      renderBynameList();
+    }
   } catch (err) {
     console.error("Gagal memuat data:", err);
   }
@@ -141,7 +158,7 @@ function filterKelompok() {
   selKelompok.disabled = false;
 }
 
-// Render By-Name List berdasarkan Desa & Kelompok yang dipilih
+// Render By-Name List per Kelompok, Terkelompok & Terurut Berdasarkan Jenjang Usia
 function renderBynameList() {
   const desa = document.getElementById("select-desa").value;
   const kelompok = document.getElementById("select-kelompok").value;
@@ -152,46 +169,81 @@ function renderBynameList() {
     return;
   }
 
-  const listPeserta = masterGenerus.filter(g => g.desa === desa && g.kelompok === kelompok).sort((a,b) => a.nama.localeCompare(b.nama));
+  // Hanya ambil yang belum diabsen (belum ada di globalPresensi hari ini)
+  const listPeserta = masterGenerus.filter(g => {
+    if (g.desa !== desa || g.kelompok !== kelompok) return false;
+    const sudahAbsen = globalPresensi.some(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kelompok).trim().toLowerCase());
+    return !sudahAbsen;
+  });
 
   if (!listPeserta.length) {
-    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Tidak ada data generus pada kelompok ini.</p>';
+    container.innerHTML = `
+      <div class="bg-emerald-900/20 border border-emerald-700/50 p-8 rounded-2xl text-center space-y-2">
+        <span class="text-3xl">🎉</span>
+        <h4 class="font-bold text-emerald-400 text-sm">Alhamdulillah, Semua Selesai!</h4>
+        <p class="text-xs text-slate-300">Seluruh generus di kelompok ${kelompok} sudah diabsen.</p>
+      </div>
+    `;
     return;
   }
 
-  container.innerHTML = `
-    <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
-      <h3 class="font-bold text-sm text-emerald-400 border-b border-slate-700 pb-2">Daftar Generus: ${kelompok} (${listPeserta.length} Orang)</h3>
-      <div class="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
-        ${listPeserta.map(p => {
-          const absensi = globalPresensi.find(x => x.nama === p.nama && x.kelompok === p.kelompok);
-          const status = absensi ? absensi.status : 'Belum Absen';
-          const badgeColor = status === 'Hadir' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : status === 'Izin' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600';
-          
-          return `
+  // Kelompokkan berdasarkan Jenjang Usia, lalu urutkan sesuai ranking (Pra-Remaja -> Remaja -> Muda-Mudi)
+  const jenjangGroups = {};
+  listPeserta.forEach(p => {
+    const j = p.jenjang || 'Lainnya';
+    if (!jenjangGroups[j]) jenjangGroups[j] = [];
+    jenjangGroups[j].push(p);
+  });
+
+  const sortedJenjangKeys = Object.keys(jenjangGroups).sort((a, b) => getJenjangScore(a) - getJenjangScore(b));
+
+  container.innerHTML = sortedJenjangKeys.map(jenjang => {
+    const members = jenjangGroups[jenjang].sort((a,b) => a.nama.localeCompare(b.nama));
+    return `
+      <div class="bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-3 shadow-lg">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+          <h3 class="font-bold text-xs sm:text-sm text-emerald-400 uppercase tracking-wide">📍 Jenjang: ${jenjang}</h3>
+          <span class="bg-slate-700 text-slate-300 text-[10px] px-2.5 py-0.5 rounded-full font-semibold">${members.length} Orang</span>
+        </div>
+        <div class="space-y-2">
+          ${members.map(p => `
             <div class="bg-slate-900 p-3 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <p class="font-bold text-slate-100 text-xs sm:text-sm">${p.nama}</p>
-                <p class="text-[11px] text-slate-400">Jenjang: <span class="text-teal-300 font-semibold">${p.jenjang || '-'}</span></p>
+                <p class="text-[10px] text-slate-400">Desa: ${p.desa}</p>
               </div>
-              <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                <span class="text-[10px] px-2.5 py-1 rounded-full border font-bold ${badgeColor}">${status}</span>
-                <div class="flex gap-1">
-                  <button onclick="submitPresensiByname('${p.nama}', '${p.kelompok}', '${p.jenjang}', 'Hadir')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition">Hadir</button>
-                  <button onclick="submitPresensiByname('${p.nama}', '${p.kelompok}', '${p.jenjang}', 'Izin')" class="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition">Izin</button>
-                </div>
+              <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button onclick="submitPresensiByname('${p.nama}', '${p.kelompok}', '${p.jenjang}', 'Hadir')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition shadow">Hadir</button>
+                <button onclick="submitPresensiByname('${p.nama}', '${p.kelompok}', '${p.jenjang}', 'Izin')" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition shadow">Izin</button>
               </div>
             </div>
-          `;
-        }).join('')}
+          `).join('')}
+        </div>
       </div>
-    </div>
-  `;
+    `;
+  }).join('');
 }
 
 async function submitPresensiByname(nama, kelompok, jenjang, status) {
-  let keterangan = status === 'Hadir' ? 'Hadir di lokasi' : prompt("Masukkan alasan izin:", "Sakit / Acara keluarga");
-  if (status === 'Izin' && !keterangan) return;
+  let keterangan = status === 'Hadir' ? 'Hadir di lokasi' : '';
+  
+  if (status === 'Izin') {
+    const { value: text } = await Swal.fire({
+      title: 'Wajib Mengisi Keterangan Izin',
+      input: 'text',
+      inputPlaceholder: 'Contoh: Sakit / Acara Keluarga / Tugas Luar Kota',
+      showCancelButton: true,
+      confirmButtonText: 'Kirim Izin',
+      cancelButtonText: 'Batal',
+      inputValidator: (value) => {
+        if (!value) {
+          return 'Keterangan izin tidak boleh kosong!';
+        }
+      }
+    });
+    if (!text) return;
+    keterangan = text;
+  }
 
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -199,16 +251,29 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
       body: JSON.stringify({ action: "presensi", nama, kelompok, jenjang, status, keterangan })
     });
     const result = await res.json();
+    
     if (result.status === 'success') {
-      alert(`Presensi ${nama} (${status}) berhasil dicatat!`);
-      loadData().then(() => renderBynameList());
+      // Toast Cepat 0.5 Detik (500ms)
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: `${nama} (${status})`,
+        showConfirmButton: false,
+        timer: 500,
+        timerProgressBar: true
+      });
+
+      // Langsung muat data & render ulang agar langsung hilang dari grid
+      await loadData();
+      renderBynameList();
     }
   } catch (err) {
     alert("Gagal mengirim presensi.");
   }
 }
 
-// Render Riwayat By-Name per Kelompok
+// Render Riwayat Ter-grid per Kelompok, Terurut Berdasarkan Jenjang Usia
 function renderRiwayatKelompok() {
   const container = document.getElementById("list-riwayat-all");
   const kelompokUnik = [...new Set(masterGenerus.map(m => m.kelompok))].filter(Boolean).sort();
@@ -219,22 +284,35 @@ function renderRiwayatKelompok() {
   }
 
   container.innerHTML = kelompokUnik.map(kel => {
-    const anggota = masterGenerus.filter(m => m.kelompok === kel);
+    let anggota = masterGenerus.filter(m => m.kelompok === kel);
+    
+    // Urutkan anggota berdasarkan ranking jenjang usia terlebih dahulu, lalu abjad nama
+    anggota.sort((a, b) => {
+      const scoreA = getJenjangScore(a.jenjang);
+      const scoreB = getJenjangScore(b.jenjang);
+      if (scoreA !== scoreB) return scoreA - scoreB;
+      return a.nama.localeCompare(b.nama);
+    });
+
     return `
-      <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow space-y-3">
-        <h4 class="font-bold text-emerald-400 text-sm border-b border-slate-700 pb-2">Kelompok: ${kel} (${anggota.length} Anggota)</h4>
-        <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+      <div class="bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-700 shadow space-y-3">
+        <h4 class="font-bold text-emerald-400 text-sm border-b border-slate-700 pb-2 flex justify-between items-center">
+          <span>Kelompok: ${kel}</span>
+          <span class="text-xs text-slate-400 font-normal">${anggota.length} Anggota</span>
+        </h4>
+        <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
           ${anggota.map(a => {
-            const abs = globalPresensi.find(x => x.nama === a.nama && x.kelompok === kel);
+            const abs = globalPresensi.find(x => String(x.nama).trim().toLowerCase() === String(a.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kel).trim().toLowerCase());
             const st = abs ? abs.status : 'Belum Absen';
-            const badge = st === 'Hadir' ? 'text-emerald-400 bg-emerald-500/10' : st === 'Izin' ? 'text-amber-400 bg-amber-500/10' : 'text-slate-400 bg-slate-700/30';
+            const badge = st === 'Hadir' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : st === 'Izin' ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' : 'text-slate-400 bg-slate-700/30 border-slate-600';
+            
             return `
-              <div class="bg-slate-900 p-2 rounded-xl border border-slate-700/60 flex justify-between items-center text-xs">
+              <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700/60 flex justify-between items-center text-xs">
                 <div>
                   <span class="font-semibold text-slate-200">${a.nama}</span>
-                  <p class="text-[10px] text-slate-400">${a.desa} • ${a.jenjang || '-'}</p>
+                  <p class="text-[10px] text-slate-400">Jenjang: <span class="text-teal-300 font-medium">${a.jenjang || '-'}</span> ${abs && abs.ket ? '• Ket: ' + abs.ket : ''}</p>
                 </div>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badge}">${st}</span>
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border ${badge}">${st}</span>
               </div>
             `;
           }).join('')}
@@ -244,12 +322,11 @@ function renderRiwayatKelompok() {
   }).join('');
 }
 
-// Admin: Tambah Generus Baru
 async function saveNewGenerus() {
   const nama = document.getElementById("add-nama").value.trim();
   const kelompok = document.getElementById("add-kelompok").value.trim();
   const desa = document.getElementById("add-desa").value.trim();
-  const jenjang = document.getElementById("add-jenjang").value.trim();
+  const jenjang = document.getElementById("add-jenjang").value;
 
   if (!nama || !kelompok || !desa) return alert("Nama, Kelompok, dan Desa wajib diisi!");
 
@@ -262,7 +339,6 @@ async function saveNewGenerus() {
   document.getElementById("add-nama").value = "";
   document.getElementById("add-kelompok").value = "";
   document.getElementById("add-desa").value = "";
-  document.getElementById("add-jenjang").value = "";
   loadData();
 }
 
