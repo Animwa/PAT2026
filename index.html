@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Kegiatan Akhir Tahun - Generus</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SweetAlert2 untuk Toast Notification Cepat -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans pb-28 select-none">
 
@@ -21,7 +23,7 @@
     </div>
   </header>
 
-  <!-- Konten Utama (Lebar responsif max-w-4xl untuk desktop) -->
+  <!-- Konten Utama -->
   <main class="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
 
     <!-- TAB 1: DASHBOARD -->
@@ -51,10 +53,10 @@
       </div>
     </section>
 
-    <!-- TAB 2: PRESENSI (Dengan Sub-Tab Presensi & Riwayat) -->
+    <!-- TAB 2: PRESENSI (Sub-Tab: Form & Riwayat) -->
     <section id="tab-presensi" class="hidden space-y-6">
       
-      <!-- Sub-Tab Navigation Header -->
+      <!-- Sub-Tab Navigation -->
       <div class="flex bg-slate-800 p-1.5 rounded-2xl border border-slate-700 max-w-xs mx-auto shadow">
         <button onclick="switchPresensiSubTab('form')" id="subtab-form" class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-xl bg-emerald-600 text-white transition">Form Presensi</button>
         <button onclick="switchPresensiSubTab('riwayat')" id="subtab-riwayat" class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-xl text-slate-400 transition">Riwayat Absen</button>
@@ -65,7 +67,6 @@
         <div class="bg-slate-800 p-5 sm:p-6 rounded-2xl border border-slate-700 space-y-5 shadow-xl">
           <h2 class="font-bold text-emerald-400 text-base">Pilih Kelompok & Desa</h2>
 
-          <!-- Filter Horizontal untuk Desa & Kelompok -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs text-slate-400 mb-1.5 font-semibold">Pilih Desa</label>
@@ -82,18 +83,18 @@
           </div>
         </div>
 
-        <!-- Daftar Peserta By-Name Per Kelompok -->
-        <div id="container-byname" class="space-y-3">
+        <!-- Daftar Peserta By-Name Terkelompok Berdasarkan Jenjang Usia -->
+        <div id="container-byname" class="space-y-4">
           <div class="bg-slate-800/60 border border-slate-700 p-8 rounded-2xl text-center text-slate-400 text-xs">
-            Silakan pilih Desa dan Kelompok di atas untuk menampilkan daftar nama peserta.
+            Silakan pilih Desa dan Kelompok di atas untuk menampilkan daftar presensi generus.
           </div>
         </div>
       </div>
 
-      <!-- Sub-Tab 2: Riwayat Presensi Kelompok -->
+      <!-- Sub-Tab 2: Riwayat Presensi Ter-grid & Terurut Jenjang -->
       <div id="subcontent-riwayat" class="hidden space-y-4">
         <div class="flex justify-between items-center bg-slate-800 p-4 rounded-2xl border border-slate-700">
-          <h3 class="font-bold text-sm sm:text-base text-slate-200">📋 Rekapitulasi Riwayat Presensi</h3>
+          <h3 class="font-bold text-sm sm:text-base text-slate-200">📋 Rekapitulasi Riwayat Absensi</h3>
           <button onclick="loadData()" class="text-xs text-emerald-400 underline font-semibold">Refresh Data</button>
         </div>
         <div id="list-riwayat-all" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -136,7 +137,7 @@
 
   </main>
 
-  <!-- PANEL ADMIN TERSEMBUNYI (MODAL) -->
+  <!-- PANEL ADMIN TERSEMBUNYI -->
   <div id="admin-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-xl w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center">
@@ -169,14 +170,17 @@
           <div id="adm-list-presensi" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
         </div>
 
-        <!-- Tambah Peserta Baru (By Name) -->
         <div id="adm-sec-peserta" class="hidden space-y-3">
           <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
             <p class="font-bold text-emerald-400">➕ Tambah Data Generus Baru</p>
             <input type="text" id="add-nama" placeholder="Nama Lengkap" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs">
             <input type="text" id="add-kelompok" placeholder="Kelompok" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs">
             <input type="text" id="add-desa" placeholder="Desa" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs">
-            <input type="text" id="add-jenjang" placeholder="Jenjang Usia (Cth: Remaja)" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs">
+            <select id="add-jenjang" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200">
+              <option value="Pra-Remaja">Pra-Remaja</option>
+              <option value="Remaja">Remaja</option>
+              <option value="Muda-Mudi">Muda-Mudi</option>
+            </select>
             <button onclick="saveNewGenerus()" class="w-full bg-emerald-600 hover:bg-emerald-500 font-bold py-2.5 rounded-xl text-white">Simpan Peserta</button>
           </div>
         </div>
@@ -184,7 +188,6 @@
         <div id="adm-sec-rundown" class="hidden space-y-3">
           <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2.5">
             <p class="font-bold text-emerald-400">➕ Tambah / Edit Rundown</p>
-            <input type="hidden" id="rd-id">
             <div class="grid grid-cols-2 gap-2">
               <input type="text" id="rd-mulai" placeholder="Mulai (Cth: 19.30)" class="bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
               <input type="text" id="rd-selesai" placeholder="Selesai (Cth: 20.00)" class="bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
@@ -199,7 +202,6 @@
         <div id="adm-sec-kegiatan" class="hidden space-y-3">
           <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2.5">
             <p class="font-bold text-teal-400">➕ Tambah / Edit Kegiatan & Uraian</p>
-            <input type="hidden" id="kg-id">
             <input type="text" id="kg-nama" placeholder="Nama Kegiatan / Sesi" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
             <input type="text" id="kg-u1" placeholder="Uraian Poin 1" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
             <input type="text" id="kg-u2" placeholder="Uraian Poin 2" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs">
@@ -212,7 +214,7 @@
     </div>
   </div>
 
-  <!-- BOTTOM NAVBAR RESPONSIF -->
+  <!-- BOTTOM NAVBAR -->
   <nav class="fixed bottom-0 inset-x-0 bg-slate-800/95 backdrop-blur border-t border-slate-700 flex justify-around py-3 z-20 max-w-4xl mx-auto shadow-2xl">
     <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-emerald-400 text-xs font-bold gap-1 transition">
       <span class="text-xl">🏠</span><span>Dashboard</span>
