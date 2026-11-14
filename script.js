@@ -1,5 +1,5 @@
 // GANTI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxUPUWPpBBLJMWlhpFy-Y9GUXJQvT-kvVDI8OfSGzuLhxkQCHGJQV_jPq-e1cSuPb6M/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbye0Oqz2eLTR7p5lSRxj8N9MJ9nRosWyXXOfr3nlMWUH6wgaFWElvWMm_x1gGyFsPth/exec";
 
 let masterGenerus = [];
 let globalRundown = [];
