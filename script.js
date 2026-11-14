@@ -6,7 +6,6 @@ let globalRundown = [];
 let globalKegiatan = [];
 let clickCounter = 0;
 
-// Urutan prioritas jenjang usia
 const jenjangRanking = {
   'pra-remaja': 1,
   'pra remaja': 1,
@@ -22,7 +21,7 @@ function getJenjangScore(val) {
 }
 
 window.onload = () => {
-  loadData();
+  loadDataSilent();
 };
 
 // Keamanan Client-Side
@@ -32,9 +31,6 @@ document.onkeydown = function(e) {
     e.preventDefault();
     document.getElementById("admin-modal").classList.remove('hidden');
     return;
-  }
-  if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74)) || (e.ctrlKey && e.keyCode == 85)) {
-    return false;
   }
 };
 
@@ -114,7 +110,8 @@ function switchPresensiSubTab(sub) {
   if (sub === 'riwayat') renderRiwayatKelompok();
 }
 
-async function loadData() {
+// Muat data awal sekali tanpa mengganggu state saat tab aktif
+async function loadDataSilent() {
   try {
     const res = await fetch(SCRIPT_URL);
     const data = await res.json();
@@ -128,15 +125,14 @@ async function loadData() {
 
     const desaUnik = [...new Set(masterGenerus.map(item => item.desa))].filter(Boolean).sort();
     const selDesa = document.getElementById("select-desa");
-    selDesa.innerHTML = '<option value="">-- Pilih Desa --</option>';
-    desaUnik.forEach(d => selDesa.innerHTML += `<option value="${d}">${d}</option>`);
+    
+    // Hanya isi jika belum ada opsi agar tidak mereset pilihan user
+    if (selDesa.options.length <= 1) {
+      selDesa.innerHTML = '<option value="">-- Pilih Desa --</option>';
+      desaUnik.forEach(d => selDesa.innerHTML += `<option value="${d}">${d}</option>`);
+    }
 
     renderSaran(data.saranList || []);
-    
-    // Refresh list if currently active
-    if (document.getElementById("select-kelompok").value) {
-      renderBynameList();
-    }
   } catch (err) {
     console.error("Gagal memuat data:", err);
   }
@@ -169,7 +165,7 @@ function renderBynameList() {
     return;
   }
 
-  // Hanya ambil yang belum diabsen (belum ada di globalPresensi hari ini)
+  // Filter peserta yang belum diabsen
   const listPeserta = masterGenerus.filter(g => {
     if (g.desa !== desa || g.kelompok !== kelompok) return false;
     const sudahAbsen = globalPresensi.some(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kelompok).trim().toLowerCase());
@@ -187,7 +183,6 @@ function renderBynameList() {
     return;
   }
 
-  // Kelompokkan berdasarkan Jenjang Usia, lalu urutkan sesuai ranking (Pra-Remaja -> Remaja -> Muda-Mudi)
   const jenjangGroups = {};
   listPeserta.forEach(p => {
     const j = p.jenjang || 'Lainnya';
@@ -197,7 +192,16 @@ function renderBynameList() {
 
   const sortedJenjangKeys = Object.keys(jenjangGroups).sort((a, b) => getJenjangScore(a) - getJenjangScore(b));
 
-  container.innerHTML = sortedJenjangKeys.map(jenjang => {
+  let htmlContent = `
+    <div class="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700 mb-2">
+      <span class="text-xs font-bold text-slate-300">⚡ Aksi Cepat Kelompok</span>
+      <button onclick="hadirkanSemuaKelompok()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition shadow">
+        ✅ Hadirkan Semua (${listPeserta.length} Orang)
+      </button>
+    </div>
+  `;
+
+  htmlContent += sortedJenjangKeys.map(jenjang => {
     const members = jenjangGroups[jenjang].sort((a,b) => a.nama.localeCompare(b.nama));
     return `
       <div class="bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-3 shadow-lg">
@@ -207,7 +211,7 @@ function renderBynameList() {
         </div>
         <div class="space-y-2">
           ${members.map(p => `
-            <div class="bg-slate-900 p-3 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div id="row-${p.nama.replace(/\s+/g, '')}" class="bg-slate-900 p-3 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 transition-all">
               <div>
                 <p class="font-bold text-slate-100 text-xs sm:text-sm">${p.nama}</p>
                 <p class="text-[10px] text-slate-400">Desa: ${p.desa}</p>
@@ -222,8 +226,11 @@ function renderBynameList() {
       </div>
     `;
   }).join('');
+
+  container.innerHTML = htmlContent;
 }
 
+// Absen Cepat 1 Orang (Optimistic UI & Hilang Instan)
 async function submitPresensiByname(nama, kelompok, jenjang, status) {
   let keterangan = status === 'Hadir' ? 'Hadir di lokasi' : '';
   
@@ -231,46 +238,90 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
     const { value: text } = await Swal.fire({
       title: 'Wajib Mengisi Keterangan Izin',
       input: 'text',
-      inputPlaceholder: 'Contoh: Sakit / Acara Keluarga / Tugas Luar Kota',
+      inputPlaceholder: 'Contoh: Sakit / Acara Keluarga',
       showCancelButton: true,
       confirmButtonText: 'Kirim Izin',
       cancelButtonText: 'Batal',
-      inputValidator: (value) => {
-        if (!value) {
-          return 'Keterangan izin tidak boleh kosong!';
-        }
-      }
+      inputValidator: (value) => !value ? 'Keterangan izin tidak boleh kosong!' : null
     });
     if (!text) return;
     keterangan = text;
   }
 
-  try {
-    const res = await fetch(SCRIPT_URL, {
-      method: "POST",
-      body: JSON.stringify({ action: "presensi", nama, kelompok, jenjang, status, keterangan })
-    });
-    const result = await res.json();
-    
-    if (result.status === 'success') {
-      // Toast Cepat 0.5 Detik (500ms)
-      Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: `${nama} (${status})`,
-        showConfirmButton: false,
-        timer: 500,
-        timerProgressBar: true
-      });
+  // 1. Masukkan ke memori lokal instan
+  globalPresensi.unshift({
+    nama: nama,
+    kelompok: kelompok,
+    jenjang: jenjang,
+    status: status,
+    ket: keterangan,
+    waktu: new Date().toLocaleTimeString()
+  });
 
-      // Langsung muat data & render ulang agar langsung hilang dari grid
-      await loadData();
-      renderBynameList();
-    }
-  } catch (err) {
-    alert("Gagal mengirim presensi.");
-  }
+  // 2. Render ulang list kelompok secara lokal seketika (tanpa menunggu fetch ulang)
+  renderBynameList();
+
+  // 3. Toast kilat 300ms
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: 'success',
+    title: `${nama} (${status})`,
+    showConfirmButton: false,
+    timer: 300,
+    timerProgressBar: false
+  });
+
+  // 4. Sinkronisasi ke GAS di background
+  fetch(SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({ action: "presensi", nama, kelompok, jenjang, status, keterangan })
+  }).catch(err => console.error("Sync error:", err));
+}
+
+// Fitur Kilat: Hadirkan Semua Satu Kelompok Sekaligus
+async function hadirkanSemuaKelompok() {
+  const desa = document.getElementById("select-desa").value;
+  const kelompok = document.getElementById("select-kelompok").value;
+  if (!desa || !kelompok) return;
+
+  const listPeserta = masterGenerus.filter(g => {
+    if (g.desa !== desa || g.kelompok !== kelompok) return false;
+    return !globalPresensi.some(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase());
+  });
+
+  if (!listPeserta.length) return;
+
+  if (!confirm(`Hadirkan ${listPeserta.length} orang sekaligus di kelompok ${kelompok}?`)) return;
+
+  // Update lokal massal
+  listPeserta.forEach(p => {
+    globalPresensi.unshift({
+      nama: p.nama,
+      kelompok: kelompok,
+      jenjang: p.jenjang,
+      status: 'Hadir',
+      ket: 'Hadir di lokasi',
+      waktu: new Date().toLocaleTimeString()
+    });
+
+    // Kirim background request satu per satu tanpa blocking UI
+    fetch(SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "presensi", nama: p.nama, kelompok: kelompok, jenjang: p.jenjang, status: 'Hadir', keterangan: 'Hadir di lokasi' })
+    }).catch(e => {});
+  });
+
+  renderBynameList();
+
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: 'success',
+    title: 'Semua anggota kelompok berhasil di-hadirkan!',
+    showConfirmButton: false,
+    timer: 500
+  });
 }
 
 // Render Riwayat Ter-grid per Kelompok, Terurut Berdasarkan Jenjang Usia
@@ -286,7 +337,6 @@ function renderRiwayatKelompok() {
   container.innerHTML = kelompokUnik.map(kel => {
     let anggota = masterGenerus.filter(m => m.kelompok === kel);
     
-    // Urutkan anggota berdasarkan ranking jenjang usia terlebih dahulu, lalu abjad nama
     anggota.sort((a, b) => {
       const scoreA = getJenjangScore(a.jenjang);
       const scoreB = getJenjangScore(b.jenjang);
@@ -339,7 +389,7 @@ async function saveNewGenerus() {
   document.getElementById("add-nama").value = "";
   document.getElementById("add-kelompok").value = "";
   document.getElementById("add-desa").value = "";
-  loadData();
+  loadDataSilent();
 }
 
 function renderDashboardRundown(list) {
@@ -388,13 +438,13 @@ async function saveRundown() {
 
   await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "save_rundown", mulai, selesai, nama, ket }) });
   alert("Rundown disimpan!");
-  loadData(); fetchAdminData();
+  loadDataSilent(); fetchAdminData();
 }
 
 async function deleteRundown(id) {
   if (!confirm("Hapus?")) return;
   await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "delete_rundown", id }) });
-  loadData(); fetchAdminData();
+  loadDataSilent(); fetchAdminData();
 }
 
 function renderAdminKegiatan() {
@@ -416,13 +466,13 @@ async function saveKegiatan() {
 
   await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "save_kegiatan", nama, uraian1, uraian2, uraian3 }) });
   alert("Kegiatan disimpan!");
-  loadData(); fetchAdminData();
+  loadDataSilent(); fetchAdminData();
 }
 
 async function deleteKegiatan(id) {
   if (!confirm("Hapus?")) return;
   await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "delete_kegiatan", id }) });
-  loadData(); fetchAdminData();
+  loadDataSilent(); fetchAdminData();
 }
 
 async function kirimSaran() {
@@ -433,7 +483,7 @@ async function kirimSaran() {
   await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "saran", pengirim, pesan }) });
   alert("Saran berhasil dikirim!");
   document.getElementById("saran-pesan").value = "";
-  loadData();
+  loadDataSilent();
 }
 
 function renderSaran(list) {
