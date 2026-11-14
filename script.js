@@ -107,10 +107,16 @@ function switchPresensiSubTab(sub) {
   document.getElementById(`subcontent-${sub}`).classList.remove('hidden');
   document.getElementById(`subtab-${sub}`).className = "flex-1 py-2 text-xs sm:text-sm font-bold rounded-xl bg-emerald-600 text-white transition";
   
-  if (sub === 'riwayat') renderRiwayatKelompok();
+  if (sub === 'form') {
+    const savedDesa = localStorage.getItem('last_desa');
+    const savedKelompok = localStorage.getItem('last_kelompok');
+    if (savedDesa && savedKelompok) renderBynameList();
+  } else if (sub === 'riwayat') {
+    renderRiwayatDesaKelompok();
+  }
 }
 
-// Muat data awal sekali tanpa mengganggu state saat tab aktif
+// Muat data & auto-restore pilihan Desa & Kelompok terakhir
 async function loadDataSilent() {
   try {
     const res = await fetch(SCRIPT_URL);
@@ -126,10 +132,13 @@ async function loadDataSilent() {
     const desaUnik = [...new Set(masterGenerus.map(item => item.desa))].filter(Boolean).sort();
     const selDesa = document.getElementById("select-desa");
     
-    // Hanya isi jika belum ada opsi agar tidak mereset pilihan user
-    if (selDesa.options.length <= 1) {
-      selDesa.innerHTML = '<option value="">-- Pilih Desa --</option>';
-      desaUnik.forEach(d => selDesa.innerHTML += `<option value="${d}">${d}</option>`);
+    selDesa.innerHTML = '<option value="">-- Pilih Desa --</option>';
+    desaUnik.forEach(d => selDesa.innerHTML += `<option value="${d}">${d}</option>`);
+
+    const savedDesa = localStorage.getItem('last_desa');
+    if (savedDesa && desaUnik.includes(savedDesa)) {
+      selDesa.value = savedDesa;
+      filterKelompok(true);
     }
 
     renderSaran(data.saranList || []);
@@ -138,7 +147,7 @@ async function loadDataSilent() {
   }
 }
 
-function filterKelompok() {
+function filterKelompok(isRestore = false) {
   const desa = document.getElementById("select-desa").value;
   const selKelompok = document.getElementById("select-kelompok");
   
@@ -148,13 +157,23 @@ function filterKelompok() {
 
   if (!desa) return;
 
+  localStorage.setItem('last_desa', desa);
+
   const kelompokUnik = [...new Set(masterGenerus.filter(g => g.desa === desa).map(g => g.kelompok))].filter(Boolean).sort();
   selKelompok.innerHTML = '<option value="">-- Pilih Kelompok --</option>';
   kelompokUnik.forEach(k => selKelompok.innerHTML += `<option value="${k}">${k}</option>`);
   selKelompok.disabled = false;
+
+  if (isRestore) {
+    const savedKelompok = localStorage.getItem('last_kelompok');
+    if (savedKelompok && kelompokUnik.includes(savedKelompok)) {
+      selKelompok.value = savedKelompok;
+      renderBynameList();
+    }
+  }
 }
 
-// Render By-Name List per Kelompok, Terkelompok & Terurut Berdasarkan Jenjang Usia
+// Render By-Name List per Kelompok Berdasarkan Jenjang Usia
 function renderBynameList() {
   const desa = document.getElementById("select-desa").value;
   const kelompok = document.getElementById("select-kelompok").value;
@@ -165,7 +184,8 @@ function renderBynameList() {
     return;
   }
 
-  // Filter peserta yang belum diabsen
+  localStorage.setItem('last_kelompok', kelompok);
+
   const listPeserta = masterGenerus.filter(g => {
     if (g.desa !== desa || g.kelompok !== kelompok) return false;
     const sudahAbsen = globalPresensi.some(x => String(x.nama).trim().toLowerCase() === String(g.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kelompok).trim().toLowerCase());
@@ -211,7 +231,7 @@ function renderBynameList() {
         </div>
         <div class="space-y-2">
           ${members.map(p => `
-            <div id="row-${p.nama.replace(/\s+/g, '')}" class="bg-slate-900 p-3 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 transition-all">
+            <div class="bg-slate-900 p-3 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <p class="font-bold text-slate-100 text-xs sm:text-sm">${p.nama}</p>
                 <p class="text-[10px] text-slate-400">Desa: ${p.desa}</p>
@@ -248,7 +268,6 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
     keterangan = text;
   }
 
-  // 1. Masukkan ke memori lokal instan
   globalPresensi.unshift({
     nama: nama,
     kelompok: kelompok,
@@ -258,10 +277,8 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
     waktu: new Date().toLocaleTimeString()
   });
 
-  // 2. Render ulang list kelompok secara lokal seketika (tanpa menunggu fetch ulang)
   renderBynameList();
 
-  // 3. Toast kilat 300ms
   Swal.fire({
     toast: true,
     position: 'top-end',
@@ -272,7 +289,6 @@ async function submitPresensiByname(nama, kelompok, jenjang, status) {
     timerProgressBar: false
   });
 
-  // 4. Sinkronisasi ke GAS di background
   fetch(SCRIPT_URL, {
     method: "POST",
     body: JSON.stringify({ action: "presensi", nama, kelompok, jenjang, status, keterangan })
@@ -294,7 +310,6 @@ async function hadirkanSemuaKelompok() {
 
   if (!confirm(`Hadirkan ${listPeserta.length} orang sekaligus di kelompok ${kelompok}?`)) return;
 
-  // Update lokal massal
   listPeserta.forEach(p => {
     globalPresensi.unshift({
       nama: p.nama,
@@ -305,7 +320,6 @@ async function hadirkanSemuaKelompok() {
       waktu: new Date().toLocaleTimeString()
     });
 
-    // Kirim background request satu per satu tanpa blocking UI
     fetch(SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ action: "presensi", nama: p.nama, kelompok: kelompok, jenjang: p.jenjang, status: 'Hadir', keterangan: 'Hadir di lokasi' })
@@ -324,45 +338,81 @@ async function hadirkanSemuaKelompok() {
   });
 }
 
-// Render Riwayat Ter-grid per Kelompok, Terurut Berdasarkan Jenjang Usia
-function renderRiwayatKelompok() {
+// Render Riwayat Ter-grid Berdasarkan Desa -> Kelompok dengan Statistik Lengkap
+function renderRiwayatDesaKelompok() {
   const container = document.getElementById("list-riwayat-all");
-  const kelompokUnik = [...new Set(masterGenerus.map(m => m.kelompok))].filter(Boolean).sort();
+  
+  const desaUnik = [...new Set(masterGenerus.map(m => m.desa))].filter(Boolean).sort();
 
-  if (!kelompokUnik.length) {
-    container.innerHTML = '<p class="text-xs text-slate-400 text-center col-span-full">Belum ada data kelompok.</p>';
+  if (!desaUnik.length) {
+    container.innerHTML = '<p class="text-xs text-slate-400 text-center col-span-full">Belum ada data desa.</p>';
     return;
   }
 
-  container.innerHTML = kelompokUnik.map(kel => {
-    let anggota = masterGenerus.filter(m => m.kelompok === kel);
-    
-    anggota.sort((a, b) => {
-      const scoreA = getJenjangScore(a.jenjang);
-      const scoreB = getJenjangScore(b.jenjang);
-      if (scoreA !== scoreB) return scoreA - scoreB;
-      return a.nama.localeCompare(b.nama);
-    });
+  container.innerHTML = desaUnik.map(desa => {
+    const kelompokDiDesa = [...new Set(masterGenerus.filter(m => m.desa === desa).map(m => m.kelompok))].filter(Boolean).sort();
 
     return `
-      <div class="bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-700 shadow space-y-3">
-        <h4 class="font-bold text-emerald-400 text-sm border-b border-slate-700 pb-2 flex justify-between items-center">
-          <span>Kelompok: ${kel}</span>
-          <span class="text-xs text-slate-400 font-normal">${anggota.length} Anggota</span>
-        </h4>
-        <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
-          ${anggota.map(a => {
-            const abs = globalPresensi.find(x => String(x.nama).trim().toLowerCase() === String(a.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kel).trim().toLowerCase());
-            const st = abs ? abs.status : 'Belum Absen';
-            const badge = st === 'Hadir' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : st === 'Izin' ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' : 'text-slate-400 bg-slate-700/30 border-slate-600';
+      <div class="col-span-full bg-slate-800/90 border border-slate-700 p-4 sm:p-5 rounded-2xl shadow space-y-4">
+        <h3 class="font-black text-base text-emerald-400 border-b border-slate-700 pb-2">🏘️ Desa: ${desa}</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${kelompokDiDesa.map(kel => {
+            const anggota = masterGenerus.filter(m => m.desa === desa && m.kelompok === kel);
             
+            // Hitung statistik kelompok
+            let total = anggota.length;
+            let hadir = 0;
+            let izin = 0;
+            let belumHadir = 0;
+
+            const detailAnggota = anggota.map(a => {
+              const abs = globalPresensi.find(x => String(x.nama).trim().toLowerCase() === String(a.nama).trim().toLowerCase() && String(x.kelompok).trim().toLowerCase() === String(kel).trim().toLowerCase());
+              const st = abs ? abs.status : 'Belum Absen';
+              
+              if (st === 'Hadir') hadir++;
+              else if (st === 'Izin') izin++;
+              else belumHadir++;
+
+              return { ...a, status: st, ket: abs ? abs.ket : '' };
+            });
+
+            // Urutkan berdasarkan jenjang lalu nama
+            detailAnggota.sort((a, b) => {
+              const scoreA = getJenjangScore(a.jenjang);
+              const scoreB = getJenjangScore(b.jenjang);
+              if (scoreA !== scoreB) return scoreA - scoreB;
+              return a.nama.localeCompare(b.nama);
+            });
+
             return `
-              <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700/60 flex justify-between items-center text-xs">
-                <div>
-                  <span class="font-semibold text-slate-200">${a.nama}</span>
-                  <p class="text-[10px] text-slate-400">Jenjang: <span class="text-teal-300 font-medium">${a.jenjang || '-'}</span> ${abs && abs.ket ? '• Ket: ' + abs.ket : ''}</p>
+              <div class="bg-slate-900 p-4 rounded-xl border border-slate-700/80 space-y-3">
+                <div class="border-b border-slate-800 pb-2 space-y-1">
+                  <div class="flex justify-between items-center">
+                    <h4 class="font-bold text-slate-100 text-sm">Kelompok: ${kel}</h4>
+                    <span class="text-[11px] bg-emerald-900/40 text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-700/50">Total: ${total}</span>
+                  </div>
+                  <div class="flex gap-2 text-[10px] font-semibold pt-1">
+                    <span class="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Hadir: ${hadir}</span>
+                    <span class="text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">Izin: ${izin}</span>
+                    <span class="text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded">Belum: ${belumHadir}</span>
+                  </div>
                 </div>
-                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border ${badge}">${st}</span>
+
+                <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  ${detailAnggota.map(a => {
+                    const badge = a.status === 'Hadir' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : a.status === 'Izin' ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' : 'text-slate-400 bg-slate-800 border-slate-700';
+                    return `
+                      <div class="bg-slate-800/60 p-2 rounded-lg border border-slate-700/50 flex justify-between items-center text-xs">
+                        <div>
+                          <span class="font-semibold text-slate-200">${a.nama}</span>
+                          <p class="text-[10px] text-slate-400">Jenjang: <span class="text-teal-300 font-medium">${a.jenjang || '-'}</span> ${a.ket ? '• ' + a.ket : ''}</p>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badge}">${a.status}</span>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
               </div>
             `;
           }).join('')}
